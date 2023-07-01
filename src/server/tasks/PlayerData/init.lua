@@ -226,7 +226,7 @@ end
 
 -- Task Initialization
 
-function PlayerData:Run()
+function PlayerData:Prep()
 	GetRemote("ChangeSetting"):OnServerEvent(settingChangeRequested)
 
 	ProfileStore = ProfileService.GetProfileStore(StoreName, ProfileTemplate)

@@ -31,7 +31,7 @@ local GameAnalytics = shared("gameanalytics-sdk")
 
 -- Framework callbacks
 
-function AnalyticsServer:Init()
+function AnalyticsServer:Prep()
     GameAnalytics:setEnabledInfoLog(false)
     GameAnalytics:setEnabledVerboseLog(false)
     GameAnalytics:configureBuild(tostring(game.PlaceVersion))

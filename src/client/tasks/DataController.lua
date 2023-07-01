@@ -116,7 +116,7 @@ end
 
 -- Framework callbacks
 
-function DataController:Init()
+function DataController:Prep()
 	ReplicaController.ReplicaOfClassCreated("PlayerData", function(replica: Replica)
 		PlayerDataReplica = replica
 	end)
