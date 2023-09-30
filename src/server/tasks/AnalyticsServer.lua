@@ -1,8 +1,7 @@
 --[[
 	AnalyticsServer.lua
 	ChiefWildin
-	Created: 05/28/2022
-    Version: 1.
+    Version: 1.0.1
 
 	Description:
 		Configures and initializes the GameAnalytics SDK.

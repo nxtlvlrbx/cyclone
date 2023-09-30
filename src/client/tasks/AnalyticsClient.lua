@@ -1,13 +1,10 @@
 --[[
 	AnalyticsClient.lua
 	ChiefWildin
-	Created: 05/28/2022
+	Version: 1.0.1
 
 	Description:
 		Initializes the GameAnalytics SDK.
-
-	Documentation:
-		No public API available at this time.
 --]]
 
 -- Main job table
