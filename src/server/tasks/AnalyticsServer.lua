@@ -2,12 +2,10 @@
 	AnalyticsServer.lua
 	ChiefWildin
 	Created: 05/28/2022
+    Version: 1.
 
 	Description:
 		Configures and initializes the GameAnalytics SDK.
-
-	Documentation:
-		No public API available at this time.
 --]]
 
 -- Main job table
@@ -16,8 +14,7 @@ local AnalyticsServer = {}
 
 -- Dependencies
 
----@module gameanalytics-sdk
-local GameAnalytics = shared("gameanalytics-sdk")
+local GameAnalytics = shared("gameanalytics-sdk") ---@module gameanalytics-sdk
 
 -- Constants
 
@@ -37,8 +34,8 @@ function AnalyticsServer:Prep()
     GameAnalytics:configureBuild(tostring(game.PlaceVersion))
 
     GameAnalytics:initialize({
-        gameKey = "COPY GAME KEY HERE",
-        secretKey = "COPY SECRET KEY HERE",
+        gameKey = "5c6bcb5402204249437fb5a7a80a4959", -- Sandbox key, replace with your own
+        secretKey = "16813a12f718bc5c620f56944e1abc3ea13ccbac", -- Sandbox key, replace with your own
         automaticSendBusinessEvents = true,
         enableDebugLog = false,
     })
