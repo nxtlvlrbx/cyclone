@@ -2,7 +2,7 @@
 	Author: ChiefWildin
 	Module: TagGroup.lua
 	Created: 02/22/2023
-	Version: 1.2.1
+	Version: 1.4.0
 
 	TagGroup is a module that allows you to easily manage a group of instances
 	with a specific tag.
@@ -18,17 +18,29 @@
 			end
 		```
 
+	.InstanceAdded: RBXScriptSignal
+	    A signal that fires whenever an instance is added to the group.
+
+	.InstanceRemoved: RBXScriptSignal
+	    A signal that fires whenever an instance is removed from the group.
+
 	.new(tag: string): TagGroup
 		Creates a new TagGroup object based on the given tag.
 
-	:AssignSetup(callback: (instance: Instance) -> ())
+	:GiveSetup(callback: (instance: Instance) -> ())
 		Assigns a callback function to be called on all instances in the group
 	    as they are added to the group. Also applies retroactively to all
 	    instances already in the group.
 
-	:AssignCleanup(callback: (instance: Instance) -> ())
+	:GiveCleanup(callback: (instance: Instance) -> ())
 	    Assigns a callback function to be called on any instance removed from
 	    the group.
+
+	:RemoveSetup(callback: (instance: Instance) -> ())
+	    Removes the given setup callback from the group.
+
+	:RemoveCleanup(callback: (instance: Instance) -> ())
+	    Removes the given cleanup callback from the group.
 
 	:GetCount(): number
 		Returns the number of instances in the group.
@@ -36,6 +48,18 @@
 	:GetArray(): { Instance }
 	    Returns an array of all instances in the group, as opposed to .Instances
 	    which is a set.
+
+	:GetOne(): Instance?
+	    Returns the first instance from the group. Not always guaranteed to be
+	    the same on repeated calls.
+
+	:WaitForOne(): Instance
+		Waits for and returns the first instance from the group. Not always
+	    guaranteed to be the same on repeated calls.
+
+	:GetTaggedDescendantsIn(container: Instance): { Instance }
+		Returns a table of all descendant instances of the container that are
+	    also in the TagGroup (have the associated tag).
 --]]
 
 -- Services
@@ -46,16 +70,26 @@ local CollectionService = game:GetService("CollectionService")
 
 export type TagGroup = {
 	Instances: { [Instance]: true },
-	AssignSetup: (self: TagGroup, callback: (instance: Instance) -> ()) -> (),
-	AssignCleanup: (self: TagGroup, callback: (instance: Instance) -> ()) -> (),
+
+	InstanceAdded: RBXScriptSignal,
+	InstanceRemoved: RBXScriptSignal,
+
+	GiveSetup: (self: TagGroup, callback: (instance: Instance) -> ()) -> (),
+	GiveCleanup: (self: TagGroup, callback: (instance: Instance) -> ()) -> (),
+	RemoveSetup: (self: TagGroup, callback: (instance: Instance) -> ()) -> (),
+	RemoveCleanup: (self: TagGroup, callback: (instance: Instance) -> ()) -> (),
 	GetCount: (self: TagGroup) -> number,
 	GetArray: (self: TagGroup) -> { Instance },
+    GetOne: (self: TagGroup) -> Instance?,
+    WaitForOne: (self: TagGroup) -> Instance,
+    GetTaggedDescendantsIn: (self: TagGroup, container: Instance) -> { Instance? },
+
 	new: (tag: string) -> TagGroup,
 }
 
 -- Module Declaration
 
-local TagGroup = {}
+local TagGroup: TagGroup = {}
 TagGroup.__index = TagGroup
 
 -- Public Functions
@@ -63,17 +97,27 @@ TagGroup.__index = TagGroup
 -- Assigns a callback function to be called on all instances in the group
 -- as they are added to the group. Also applies retroactively to all
 -- instances already in the group.
-function TagGroup:AssignSetup(callback: (instance: Instance) -> ())
+function TagGroup:GiveSetup(callback: (instance: Instance) -> ())
 	for instance in self.Instances do
-		callback(instance)
+		task.spawn(callback, instance)
 	end
-	self._setup = callback
+	self._setup[callback] = true
+end
+
+-- Removes the given setup callback from the group.
+function TagGroup:RemoveSetup(callback: (instance: Instance) -> ())
+	self._setup[callback] = nil
 end
 
 -- Assigns a callback function to be called on any instance removed from
 -- the group.
-function TagGroup:AssignCleanup(callback: (instance: Instance) -> ())
-	self._cleanup = callback
+function TagGroup:GiveCleanup(callback: (instance: Instance) -> ())
+	self._cleanup[callback] = true
+end
+
+-- Removes the given cleanup callback from the group.
+function TagGroup:RemoveCleanup(callback: (instance: Instance) -> ())
+	self._cleanup[callback] = nil
 end
 
 -- Returns the number of instances in the group.
@@ -95,38 +139,82 @@ function TagGroup:GetArray(): { Instance }
 	return array
 end
 
+-- Returns the first instance from the group. Not always guaranteed to be the
+-- same on repeated calls.
+function TagGroup:GetOne(): Instance?
+	local one: Instance?
+	for instance in self.Instances do
+		one = instance
+		break
+	end
+	return one
+end
+
+-- Waits for and returns the first instance from the group. Not always
+-- guaranteed to be the same on repeated calls.
+function TagGroup:WaitForOne(): Instance
+	local item = self:GetOne()
+
+	if item then
+		return item
+	end
+
+	return self.InstanceAdded:Wait()
+end
+
+-- Returns a table of all descendant instances of the container that are also in
+-- the TagGroup (have the associated tag).
+function TagGroup:GetTaggedDescendantsIn(container: Instance): { Instance }
+	local tagged = {}
+
+	for _, descendant in container:GetDescendants() do
+		if self.Instances[descendant] then
+			table.insert(tagged, descendant)
+		end
+	end
+
+	return tagged
+end
+
 -- Creates a new TagGroup object based on the given tag.
 function TagGroup.new(tag: string): TagGroup
 	local self = setmetatable({
 		Instances = {},
-		_setup = nil,
-		_cleanup = nil,
+		_instanceAddedEvent = Instance.new("BindableEvent"),
+		_instanceRemovedEvent = Instance.new("BindableEvent"),
+		_setup = {},
+		_cleanup = {},
 	}, TagGroup)
+
+	self.InstanceAdded = self._instanceAddedEvent.Event
+	self.InstanceRemoved = self._instanceRemovedEvent.Event
 
 	if typeof(tag) ~= "string" then
 		warn("Attempt to create TagGroup with invalid tag:", tag, "\n" .. debug.traceback())
 		return self
 	end
 
-	CollectionService:GetInstanceAddedSignal(tag):Connect(function(instance)
+	local function setupInstance(instance: Instance)
 		self.Instances[instance] = true
-		if self._setup then
-			self._setup(instance)
+		self._instanceAddedEvent:Fire(instance)
+		for callback in pairs(self._setup) do
+			task.spawn(callback, instance)
 		end
-	end)
+	end
 
-	CollectionService:GetInstanceRemovedSignal(tag):Connect(function(instance)
+	local function cleanupInstance(instance: Instance)
 		self.Instances[instance] = nil
-		if self._cleanup then
-			self._cleanup(instance)
+		self._instanceRemovedEvent:Fire(instance)
+		for callback in pairs(self._cleanup) do
+			task.spawn(callback, instance)
 		end
-	end)
+	end
+
+	CollectionService:GetInstanceAddedSignal(tag):Connect(setupInstance)
+	CollectionService:GetInstanceRemovedSignal(tag):Connect(cleanupInstance)
 
 	for _, instance in pairs(CollectionService:GetTagged(tag)) do
-		self.Instances[instance] = true
-		if self._setup then
-			self._setup(instance)
-		end
+		setupInstance(instance)
 	end
 
 	return self
@@ -134,7 +222,9 @@ end
 
 -- Aliases
 
-TagGroup.StreamedIn = TagGroup.AssignSetup
-TagGroup.StreamedOut = TagGroup.AssignCleanup
+TagGroup.AssignSetup = TagGroup.GiveSetup
+TagGroup.StreamedIn = TagGroup.GiveSetup
+TagGroup.AssignCleanup = TagGroup.GiveCleanup
+TagGroup.StreamedOut = TagGroup.GiveCleanup
 
 return TagGroup :: TagGroup
