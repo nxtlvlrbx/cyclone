@@ -2,10 +2,12 @@
 	"Order Task": {
 		"prefix": "/otask",
 		"body": [
-			"--[[",
-			"    Author: ",
-			"    Module: $TM_FILENAME",
-			"    Created: $CURRENT_MONTH/$CURRENT_DATE/$CURRENT_YEAR",
+			"--[[ File Info",
+			"",
+			"\tAuthor: ",
+			"\tModule: $TM_FILENAME",
+			"\tVersion: 1.0.0",
+			"",
 			"--]]",
 			"",
 			"-- Services",
@@ -49,10 +51,12 @@
 	"Order library module": {
 		"prefix": "/olib",
 		"body": [
-			"--[[",
-			"    Author: ",
-			"    Module: $TM_FILENAME",
-			"    Created: $CURRENT_MONTH/$CURRENT_DATE/$CURRENT_YEAR",
+			"--[[ File Info",
+			"",
+			"\tAuthor: ",
+			"\tModule: $TM_FILENAME",
+			"\tVersion: 1.0.0",
+			"",
 			"--]]",
 			"",
 			"-- Services",
@@ -83,10 +87,12 @@
 	"Luau Class": {
 		"prefix": "/class",
 		"body": [
-			"--[[",
-			"    Author: ",
-			"    Module: $TM_FILENAME",
-			"    Created: $CURRENT_MONTH/$CURRENT_DATE/$CURRENT_YEAR",
+			"--[[ File Info",
+			"",
+			"\tAuthor: ",
+			"\tModule: $TM_FILENAME",
+			"\tVersion: 1.0.0",
+			"",
 			"--]]",
 			"",
 			"-- Services",
@@ -122,5 +128,30 @@
 			""
 		],
 		"description": "Create a a new generic Luau class"
+	},
+	"Private class method": {
+		"prefix": "/private",
+		"body": [
+			"function $TM_FILENAME_BASE:_${1}(${2})",
+			"\t${3}",
+			"end"
+		],
+		"description": "Insert a new private method to the class"
+	},
+	"Public class method": {
+		"prefix": "/public",
+		"body": [
+			"function $TM_FILENAME_BASE:${1}(${2})",
+			"\t${3}",
+			"end"
+		],
+		"description": "Insert a new public method to the class"
+	},
+	"New Remote": {
+		"prefix": "/remote",
+		"body": [
+			"local ${1}Remote = GetRemote(\"${1}\")"
+		],
+		"description": "Create a new Remote reference using GetRemote"
 	}
 }

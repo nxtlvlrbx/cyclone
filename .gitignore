@@ -4,3 +4,7 @@
 # Roblox Studio lock files
 /*.rbxlx.lock
 /*.rbxl.lock
+
+# Luau LSP files
+.luaurc
+sourcemap.json

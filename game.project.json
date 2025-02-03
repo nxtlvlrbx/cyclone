@@ -1,0 +1,62 @@
+{
+	"name": "New Cyclone Project",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"$className": "ReplicatedStorage",
+			"$ignoreUnknownInstances": true,
+			"Order": {
+				"$path": "src/framework"
+			},
+			"Shared": {
+				"$path": "src/core/shared",
+				"Game": {
+					"$path": "src/game/shared"
+				}
+			}
+		},
+		"ReplicatedFirst": {
+			"$className": "ReplicatedFirst",
+			"$ignoreUnknownInstances": true,
+			"Core": {
+				"$path": "src/core/first",
+				"Game": {
+					"$path": "src/game/first"
+				}
+			}
+		},
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"Server": {
+				"$path": "src/core/server",
+				"Game": {
+					"$path": "src/game/server"
+				}
+			}
+		},
+		"StarterPlayer": {
+			"$className": "StarterPlayer",
+			"$ignoreUnknownInstances": true,
+			"StarterPlayerScripts": {
+				"$className": "StarterPlayerScripts",
+				"$ignoreUnknownInstances": true,
+				"Client": {
+					"$path": "src/core/client",
+					"Game": {
+						"$path": "src/game/client"
+					}
+				}
+			},
+			"StarterCharacterScripts": {
+				"$className": "StarterCharacterScripts",
+				"$ignoreUnknownInstances": true,
+				"Character": {
+					"$path": "src/core/character",
+					"Game": {
+						"$path": "src/game/character"
+					}
+				}
+			}
+		}
+	}
+}

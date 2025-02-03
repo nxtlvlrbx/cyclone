@@ -9,7 +9,7 @@ The following instructions will get you up and running with a Cyclone-powered ex
 ## 1) Download VS Code and Rojo
 1. Download and install VS Code from [here](https://code.visualstudio.com/)
 2. From VS Code, install the extension Rojo from the Extensions tab on the left sidebar or through [this link.](https://marketplace.visualstudio.com/items?itemName=evaera.vscode-rojo)
-3. In Roblox Studio, search for and add the plugin for Rojo through the toolbox, or use [this link.](https://create.roblox.com/marketplace/asset/6415005344/Rojo-7)
+3. In Roblox Studio, search for and add the plugin for Rojo through the toolbox, or use [this link.](https://create.roblox.com/store/asset/13916111004/Rojo)
 
 ## 2) Create a new repository based on this template
 1. At the top of this page, click the green "Use this template" button and select "Create a new repository"
@@ -17,12 +17,12 @@ The following instructions will get you up and running with a Cyclone-powered ex
 3. Using the software of your choice (I typically use VS Code's Source Control menu), clone your new repository to your computer
 
 ## 3) Project configuration
-1. Open the new repository in VS Code and then open the `default.project.json` file
+1. Open the new repository in VS Code and then open the `game.project.json` file
 2. At the top, you'll see a string that reads "New Cyclone Project", replace this with the name of your new project and save the file
 
 ## 4) Sync code into Roblox Studio
 1. In VS Code, click the Rojo button on the bottom right (if you don't see this icon, verify the Rojo extension is installed and restart VS Code)
-2. In the context menu that appears, click on `default.project.json` at the bottom
+2. In the context menu that appears, click on `game.project.json` at the bottom
 3. In Roblox Studio, create or open a place file that will host your new experience
 4. Switch to the Plugins tab, and select Rojo
 5. In the Rojo window that appears, click "Connect"
