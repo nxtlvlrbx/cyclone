@@ -2,7 +2,7 @@
 	PlayerData.lua
 	ChiefWildin
 	Created: 04/07/2022
-	Version: 2.1.2
+	Version: 2.2.1
 
 	Description:
 		Handles the implementation of ProfileService and ReplicaService for
@@ -37,6 +37,15 @@
 			```lua
 				PlayerData:SetValue(player, "Tokens", 0)
 			```
+
+		::SetValueCallback(player: Player, keyPath: string | { string }, callback: (newValue: any, oldValue: any) -> ()): RBXScriptConnection
+			Sets a callback function to be run when the value in path is changed.
+			Example:
+			```lua
+				PlayerData:SetValueCallback(player, "Tokens", function(newValue, oldValue)
+					print(player.Name .. "'s tokens have changed from " .. tostring(oldValue) .. " to " .. tostring(newValue))
+				end)
+			```
 --]]
 
 -- Services
@@ -49,14 +58,14 @@ local PlayerData = {}
 
 -- Dependencies
 
-local ReplicaService = shared("ReplicaService") ---@module ReplicaService
+local ReplicaServiceListeners = shared("ReplicaServiceListeners") ---@module ReplicaServiceListeners
 local ProfileService = shared("ProfileService") ---@module ProfileService
 local ProfileTemplate = shared("ProfileTemplate") ---@module ProfileTemplate
 local GetRemote = shared("GetRemote") ---@module GetRemote
 
 -- Types
 
-type Replica = ReplicaService.Replica
+type Replica = ReplicaServiceListeners.Replica
 
 -- Constants
 
@@ -80,7 +89,7 @@ local StoreName = "PlayerData"
 local PlayerCache = {}
 local PlayerProfiles = {}
 local ProcessedPlayers = {}
-local PlayerDataToken = ReplicaService.NewClassToken("PlayerData")
+local PlayerDataToken = ReplicaServiceListeners.NewClassToken("PlayerData")
 local ProfileStore: DataStore
 
 -- Objects
@@ -139,7 +148,7 @@ local function processPlayer(player: Player)
 		end)
 
 		if player:IsDescendantOf(Players) then
-			local data: Replica = ReplicaService.NewReplica({
+			local data: Replica = ReplicaServiceListeners.NewReplica({
 				ClassToken = PlayerDataToken,
 				Tags = { Player = player },
 				Data = profile.Data,
@@ -211,6 +220,8 @@ function PlayerData:GetValue(player: Player, keyPath: string | { string }): any?
 		end
 		currentLocation = currentLocation[index]
 	end
+
+	return
 end
 
 -- Sets the value at the given `keyPath` to the given `newValue`. Keys can be
@@ -224,9 +235,24 @@ function PlayerData:SetValue(player: Player, keyPath: string | { string }, newVa
 	self:GetPlayerDataReplica(player):SetValue(keyPath, newValue)
 end
 
+-- Sets a callback function to be run when the value in path is changed. Keys can be passed in any of the
+-- following ways:
+-- ```lua
+-- PlayerData:SetValueCallback(player, "Tokens", callback)
+-- PlayerData:SetValueCallback(player, "Powerups.ExtraLives", callback)
+-- PlayerData:SetValueCallback(player, { "Powerups", "ExtraLives" }, callback)
+-- ```
+function PlayerData:SetValueCallback(
+	player: Player,
+	keyPath: string | { string },
+	callback: (newValue: any, oldValue: any) -> ()
+): RBXScriptConnection
+	return self:GetPlayerDataReplica(player):ListenToChange(keyPath, callback) :: RBXScriptConnection
+end
+
 -- Task Initialization
 
-function PlayerData:Prep()
+function PlayerData:Run()
 	GetRemote("ChangeSetting"):OnServerEvent(settingChangeRequested)
 
 	ProfileStore = ProfileService.GetProfileStore(StoreName, ProfileTemplate)
