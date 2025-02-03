@@ -189,11 +189,11 @@ end
 
 -- Public functions
 
---Returns the `Replica` object associated with the given player. Modifying
---tables/arrays should be done through the Replica instead of
---`GetValue`/`SetValue` in order to make sure they replicate properly. The
---Replica API can be found at:
---https://madstudioroblox.github.io/ReplicaService/api/#replica
+-- Returns the `Replica` object associated with the given player. Modifying
+-- tables/arrays should be done through the Replica instead of
+-- `GetValue`/`SetValue` in order to make sure they replicate properly. The
+-- Replica API can be found at:
+-- https://madstudioroblox.github.io/Replica/
 function PlayerData:GetPlayerDataReplica(player: Player): Replica
 	local startFetchTick = os.clock()
 	local warned = false
@@ -250,7 +250,7 @@ function PlayerData:SetValue(player: Player, keyPath: string | { string }, newVa
 	local callback = DataCallbacks[`{player.UserId}.{getPathString(keyPath)}`]
 	local oldValue = callback and self:GetValue(player, keyPath)
 
-	self:GetPlayerDataReplica(player):Set(keyPath, newValue)
+	self:GetPlayerDataReplica(player):Set(getPathTable(keyPath), newValue)
 
 	if callback then
 		task.spawn(callback, newValue, oldValue)
@@ -288,7 +288,7 @@ end
 
 -- Task Initialization
 
-function PlayerData:Run()
+function PlayerData:Init()
 	GetRemote("ChangeSetting"):OnServerEvent(settingChangeRequested)
 
 	ProfileDataStore = ProfileStore.New(StoreName, ProfileTemplate)

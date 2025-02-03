@@ -1,7 +1,7 @@
 --[[
 	DataController.lua
 	ChiefWildin
-	Version: 2.3.1
+	Version: 2.4.0
 
 	Handles data replication coming from the server.
 
@@ -53,6 +53,21 @@ type Replica = ReplicaClient.Replica
 
 local PlayerDataReplica: Replica
 
+-- Private functions
+
+local function getPathTable(path: string | { string }): { string }
+	local indices
+	if typeof(path) == "string" then
+		indices = string.split(path, ".")
+	elseif typeof(path) == "table" then
+		indices = path
+	else
+		error("Invalid keyPath type: " .. typeof(path))
+	end
+
+	return indices
+end
+
 -- Public functions
 
 -- Returns the Replica object that contains player data
@@ -79,15 +94,7 @@ end
 -- Returns the value at the specified path in the player data table. Paths can
 -- be of the form "Key1.Key2.Key3" or {"Key1", "Key2", "Key3"}
 function DataController:GetValue(keyPath: string | { string }): any?
-	local indices
-	if typeof(keyPath) == "string" then
-		indices = string.split(keyPath, ".")
-	elseif typeof(keyPath) == "table" then
-		indices = keyPath
-	else
-		error("Invalid keyPath type: " .. typeof(keyPath))
-	end
-
+	local indices = getPathTable(keyPath)
 	local currentLocation = self:GetData()
 	for count, index in indices do
 		if count == #indices then
@@ -101,7 +108,7 @@ end
 
 -- Sets a callback function to be run when the value in path is changed
 function DataController:SetValueCallback(
-	path: string,
+	path: string | { string },
 	callback: (newValue: any, oldValue: any) -> (),
 	runImmediately: boolean?
 ): RBXScriptConnection
@@ -110,7 +117,7 @@ function DataController:SetValueCallback(
 		callback(value, value)
 	end
 
-	return self:GetDataReplica():OnSet(path, callback)
+	return self:GetDataReplica():OnSet(getPathTable(path), callback)
 end
 
 -- Framework callbacks
