@@ -42,35 +42,16 @@ local DataController = { Priority = 10 }
 
 -- Dependencies
 
-local ReplicaController = RunService:IsRunning() and shared("ReplicaController") ---@module ReplicaController
+local DeepCopy = shared("DeepCopy") ---@module DeepCopy
+local ReplicaClient = RunService:IsRunning() and shared("ReplicaClient") ---@module ReplicaClient
 
 -- Types
 
-type Replica = ReplicaController.Replica
-
--- Constants
+type Replica = ReplicaClient.Replica
 
 -- Global variables
 
 local PlayerDataReplica: Replica
-
--- Objects
-
--- Private functions
-
-local function deepCopy(target: {}): {}
-	local copy = {}
-
-	for key, value in pairs(target) do
-		if typeof(value) == "table" then
-			copy[key] = deepCopy(value)
-		else
-			copy[key] = value
-		end
-	end
-
-	return copy
-end
 
 -- Public functions
 
@@ -79,9 +60,9 @@ function DataController:GetDataReplica(): Replica
 	while not PlayerDataReplica do
 		if not RunService:IsRunning() then
 			PlayerDataReplica = {
-				Data = deepCopy(shared("ProfileTemplate")),
+				Data = DeepCopy(shared("ProfileTemplate")),
 				ListenToChange = function() end,
-			}
+			} :: Replica
 		else
 			task.wait()
 		end
@@ -129,18 +110,18 @@ function DataController:SetValueCallback(
 		callback(value, value)
 	end
 
-	return self:GetDataReplica():ListenToChange(path, callback)
+	return self:GetDataReplica():OnSet(path, callback)
 end
 
 -- Framework callbacks
 
 function DataController:Prep()
 	if RunService:IsRunning() then
-		ReplicaController.ReplicaOfClassCreated("PlayerData", function(replica: Replica)
+		ReplicaClient.OnNew("PlayerData", function(replica: Replica)
 			PlayerDataReplica = replica
 		end)
 
-		ReplicaController.RequestData()
+		ReplicaClient.RequestData()
 	end
 end
 

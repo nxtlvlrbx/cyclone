@@ -48,7 +48,7 @@ end
 
 -- API Functions
 
-local Cache: Cache = {}
+local Cache = {} :: Cache
 Cache.__index = Cache
 
 function Cache.new(name: string, entryLimit: number?, entryAgeLimit: number?): Cache

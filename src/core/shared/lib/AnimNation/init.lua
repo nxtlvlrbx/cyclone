@@ -208,10 +208,10 @@ export type AnimChain = {
 	Await: (AnimChain) -> AnimChain,
 }
 
-local AnimChain: AnimChain = {}
+local AnimChain = {}
 AnimChain.__index = AnimChain
 
-function AnimChain.new(animators: { Spring | Tween })
+function AnimChain.new(animators: { Spring | Tween }?)
 	local self = setmetatable({}, AnimChain)
 
 	self._animators = animators or {}
@@ -303,7 +303,7 @@ local SpringEvents: { [Instance]: { [string]: Spring } } = {}
 -- A dictionary that keeps track of different callbacks bound to groups of
 -- springs. The label key references a table containing a table of springs in
 -- the first index, and the callback function in the second index.
-local SpringBinds: { [string]: {} } = {}
+local SpringBinds: { [string]: { any } } = {}
 
 -- A dictionary that keeps track of the last tween played on each instance.
 local TweenDirectory: { [Instance]: Tween } = {}
@@ -340,7 +340,12 @@ local function murderTweenWhenDone(tween: Tween)
 	end
 end
 
-local function tweenByPivot(object: Model, tweenInfo: TweenInfo, properties: {}, waitToKill: boolean?): AnimChain
+local function tweenByPivot(
+	object: Model,
+	tweenInfo: TweenInfo,
+	properties: { [string]: any },
+	waitToKill: boolean?
+): AnimChain
 	if not object or not object:IsA("PVInstance") then
 		error("Tween by pivot failure - invalid object passed")
 		if waitToKill then
@@ -363,7 +368,12 @@ local function tweenByPivot(object: Model, tweenInfo: TweenInfo, properties: {},
 	return AnimNation.tween(fakeCenter, tweenInfo, properties, waitToKill)
 end
 
-local function tweenByScale(object: Model, tweenInfo: TweenInfo, properties: {}, waitToKill: boolean?): AnimChain
+local function tweenByScale(
+	object: Model,
+	tweenInfo: TweenInfo,
+	properties: { [string]: any },
+	waitToKill: boolean?
+): AnimChain
 	if not object or not object:IsA("PVInstance") then
 		error("Tween by scale failure - invalid object passed")
 		if waitToKill then
@@ -507,7 +517,7 @@ local function tweenSequence(
 	end
 end
 
-local function createTweenInfoFromTable(info: {})
+local function createTweenInfoFromTable(info: { [string]: any })
 	return TweenInfo.new(
 		info.Time or info.t or 1,
 		info.EasingStyle or info.Style or info.s or Enum.EasingStyle.Quad,
@@ -518,9 +528,9 @@ local function createTweenInfoFromTable(info: {})
 	)
 end
 
-local function createSpringFromInfo(springInfo: SpringInfo): Spring
+local function createSpringFromInfo(springInfo: { [string]: any }): Spring
 	local spring = Spring.new(springInfo.Initial or springInfo.i, springInfo.Clock)
-	for key, value in pairs(springInfo) do
+	for key, value in springInfo do
 		if key ~= "Initial" and key ~= "i" and key ~= "Clock" then
 			spring[key] = value
 		end
@@ -528,7 +538,7 @@ local function createSpringFromInfo(springInfo: SpringInfo): Spring
 	return spring
 end
 
-local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo): Spring
+local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo)
 	for key, value in pairs(springInfo) do
 		if key ~= "Initial" and key ~= "i" and key ~= "Clock" and key ~= "Position" then
 			spring[key] = value
@@ -636,7 +646,7 @@ end
 -- completed.
 function AnimNation.tween(
 	object: Instance | { Instance },
-	tweenInfo: TweenInfo | {},
+	tweenInfo: TweenInfo | { [string]: any },
 	properties: { [string]: any },
 	waitToKill: boolean?
 ): AnimChain

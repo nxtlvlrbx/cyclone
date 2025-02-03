@@ -12,11 +12,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
--- Setup
-
-local Order = {
-	Version = "2.2.0",
-}
+-- Dependencies
 
 -- The metatable that provides functionality for detecting bare code referencing
 -- cyclic dependencies
@@ -25,9 +21,25 @@ local CycleMetatable = require(script:WaitForChild("CycleMetatable")) ---@module
 local Settings = require(script:WaitForChild("Settings")) ---@module Settings
 
 type Initializer = Settings.Initializer
+type ModuleData = { [any]: any }
+type Order = {
+	__call: (string | ModuleScript) -> any?,
+	IndexModulesOf: (Instance) -> (),
+	LoadTasks: (Folder) -> (),
+	InitializeTasks: () -> (),
+	Version: string,
+}
+
+-- Setup
+
+local Order = {
+	Version = "2.2.1",
+} :: Order
 
 -- Override debug mode if silent mode is active
-if Settings.SilentMode then Settings.DebugMode = false end
+if Settings.SilentMode then
+	Settings.DebugMode = false
+end
 
 -- Output formatting
 
@@ -61,15 +73,15 @@ vprint("Version:", Order.Version)
 -- The current number of ancestry levels that have been indexed
 local AncestorLevelsExpanded = 0
 -- A dictionary of loaded ModuleScripts and the values they returned
-local LoadedModules: {[ModuleScript]: any} = {}
+local LoadedModules: { [ModuleScript]: any } = {}
 -- A dictionary of known module aliases and the ModuleScripts they point to
-local Modules: {[string]: ModuleScript} = {}
+local Modules: { [string]: ModuleScript | { ModuleScript } } = {}
 -- The set of all currently loading modules
-local ModulesLoading: {[ModuleScript]: boolean} = {}
+local ModulesLoading: { [ModuleScript]: boolean } = {}
 -- A dictionary that relates module data tables to the modules' names
-local NameRegistry: {[{}]: string} = {}
+local NameRegistry: { [ModuleData]: string } = {}
 -- An array that contains all currently loaded task module data
-local Tasks: {any} = {}
+local Tasks: { any } = {}
 -- The total number of discovered (but not necessarily loaded) modules
 local TotalModules = 0
 
@@ -95,7 +107,7 @@ local function replaceTempModule(moduleName: string, moduleData: any)
 				end
 
 				return result
-			end
+			end,
 		})
 	else
 		LoadedModules[Modules[moduleName]] = moduleData
@@ -133,7 +145,7 @@ end
 
 -- Returns a table of all of the provided Instance's ancestors in ascending
 -- order
-local function getAncestors(descendant: Instance): {Instance}
+local function getAncestors(descendant: Instance): { Instance }
 	local ancestors = {}
 	local current = descendant.Parent
 
@@ -165,7 +177,7 @@ local function indexNames(child: ModuleScript, levelCap: number?)
 			if typeof(existing) == "table" and not table.find(existing, child) then
 				table.insert(existing, child)
 			else
-				Modules[index] = {existing, child}
+				Modules[index] = { existing, child }
 			end
 		else
 			Modules[index] = child
@@ -179,7 +191,9 @@ local function indexNames(child: ModuleScript, levelCap: number?)
 	local ancestors = getAncestors(child)
 	local currentIndex = child.Name
 	for level: number, ancestor: Instance in pairs(ancestors) do
-		if levelCap and level > levelCap then break end
+		if levelCap and level > levelCap then
+			break
+		end
 
 		currentIndex = ancestor.Name .. "/" .. currentIndex
 		indexName(currentIndex)
@@ -191,7 +205,9 @@ local function indexNames(child: ModuleScript, levelCap: number?)
 end
 
 local function expandNameIndex(levelCap: number)
-	if levelCap <= AncestorLevelsExpanded then return end
+	if levelCap <= AncestorLevelsExpanded then
+		return
+	end
 
 	dprint("Expanding ancestry name index to level", levelCap, "- previous index:", Modules)
 
@@ -229,13 +245,15 @@ function Order.__call(_: {}, module: string | ModuleScript): any?
 	if Modules[module] and not ModulesLoading[Modules[module]] then
 		if typeof(Modules[module]) == "table" then
 			local trace = debug.traceback()
-			local trim = string.sub(trace,  string.find(trace, "__call") + 7, string.len(trace) - 1)
+			local trim = string.sub(trace, string.find(trace, "__call") + 7, string.len(trace) - 1)
 			local warning = trim .. ": Multiple modules found for '" .. module .. "' - please be more specific:\n"
 			local numDuplicates = #Modules[module]
 
 			for index, duplicate in ipairs(Modules[module]) do
-				if typeof(duplicate) == "table" then continue end
-				local formattedName = string.gsub(duplicate:GetFullName(), "[.]", '/')
+				if typeof(duplicate) == "table" then
+					continue
+				end
+				local formattedName = string.gsub(duplicate:GetFullName(), "[.]", "/")
 				warning ..= "\t\t\t\t\t\t- " .. formattedName .. if index ~= numDuplicates then "\n" else ""
 			end
 
@@ -270,7 +288,7 @@ function Order.__call(_: {}, module: string | ModuleScript): any?
 				-- Ancestor index expansion has already reached all possibly
 				-- referenced levels, so we just don't know where the module is
 				local trace = debug.traceback()
-				local trim = string.sub(trace,  string.find(trace, "__call") + 7, string.len(trace) - 1)
+				local trim = string.sub(trace, string.find(trace, "__call") + 7, string.len(trace) - 1)
 				warn(`{trim}: Attempt to require unknown module '{module}' ({typeof(module)})`)
 				return
 			end
@@ -278,7 +296,7 @@ function Order.__call(_: {}, module: string | ModuleScript): any?
 
 		local fakeModule = {
 			IsFakeModule = true,
-			Name = module
+			Name = module,
 		}
 		setmetatable(fakeModule, CycleMetatable)
 		LoadedModules[Modules[module]] = fakeModule
@@ -314,7 +332,7 @@ function Order.LoadTasks(location: Folder)
 	dprint("Loading tasks -", location:GetFullName())
 
 	local tasksLoading = 0
-	for _: number, child: ModuleScript | Folder in ipairs(location:GetChildren()) do
+	for _: number, child: Instance in location:GetChildren() do
 		if child:IsA("ModuleScript") then
 			tasksLoading += 1
 			task.spawn(function()
@@ -333,7 +351,7 @@ function Order.LoadTasks(location: Folder)
 				if taskData then
 					table.insert(Tasks, taskData)
 				else
-					warn(`Task {child} failed to load - requested as {taskName}`)
+					warn(`Task {child.Name} failed to load - requested as {taskName}`)
 				end
 
 				tasksLoading -= 1
@@ -363,11 +381,11 @@ function Order.InitializeTasks()
 	if Settings.DebugMode then
 		print("\tCurrent initialization order:")
 		for index: number, moduleData: {} in pairs(Tasks) do
-			print("\t\t" .. index .. ')', NameRegistry[moduleData] or moduleData)
+			print("\t\t" .. index .. ")", NameRegistry[moduleData] or moduleData)
 		end
 	end
 
-	local function initialize(moduleData: {}, initializer: Initializer)
+	local function initialize(moduleData: ModuleData, initializer: Initializer)
 		if moduleData[initializer.Name] then
 			local finished = false
 			local success = true
@@ -421,7 +439,7 @@ function Order.InitializeTasks()
 	end
 
 	if Settings.InitOrder == "Individual" then
-		for _: number, moduleData: {} in ipairs(Tasks) do
+		for _: number, moduleData: ModuleData in ipairs(Tasks) do
 			local config = moduleData.InitConfigOverride or Settings.InitFunctionConfig
 			for _, initializer: Initializer in ipairs(config) do
 				initialize(moduleData, initializer)
@@ -432,14 +450,15 @@ function Order.InitializeTasks()
 		-- Figure out how many total stages there are since tasks can
 		-- individually specify more than the global config does
 		local maxInitStages = #Settings.InitFunctionConfig
-		for _: number, moduleData: {} in ipairs(Tasks) do
-			maxInitStages = math.max(maxInitStages, moduleData.InitConfigOverride and #moduleData.InitConfigOverride or 0)
+		for _: number, moduleData: ModuleData in ipairs(Tasks) do
+			maxInitStages =
+				math.max(maxInitStages, moduleData.InitConfigOverride and #moduleData.InitConfigOverride or 0)
 		end
 		dprint("Initializing tasks in", maxInitStages, "stages...")
 
 		-- Execute each stage
 		for i = 1, maxInitStages do
-			for _: number, moduleData: {} in ipairs(Tasks) do
+			for _: number, moduleData: ModuleData in ipairs(Tasks) do
 				local config = moduleData.InitConfigOverride or Settings.InitFunctionConfig
 				local initializer = config[i]
 				if initializer then
@@ -485,10 +504,11 @@ if not Settings.PortableMode then
 	Order.IndexModulesOf(SharedContext)
 
 	local function loadContextTasks(context: Instance)
-		for _, child: Folder in ipairs(context:GetChildren()) do
+		for _, child: Instance in context:GetChildren() do
 			if not child:IsA("Folder") then
 				continue
 			end
+
 			if child.Name == "tasks" then
 				Order.LoadTasks(child)
 			else

@@ -1,51 +1,49 @@
 --[[
+
 	PlayerData.lua
 	ChiefWildin
-	Created: 04/07/2022
-	Version: 2.2.1
+	Version: 2.4.0
 
-	Description:
-		Handles the implementation of ProfileService and ReplicaService for
-		managing player data.
+	Handles the implementation of ProfileStore and Replica for managing player
+	data.
 
-	Setup:
-		No setup necessary.
+]]
 
-	API:
-		::GetPlayerDataReplica(player: Player): Replica
-	        Returns the Replica object associated with the given player.
-	        Modifying tables/arrays should be done through the Replica instead
-	        of GetValue/SetValue in order to make sure they replicate properly.
-	        The Replica API can be found at:
-	        https://madstudioroblox.github.io/ReplicaService/api/#replica
-			Example:
-			```lua
-				local PlayerDataReplica = PlayerData:GetPlayerDataReplica(player)
-                PlayerDataReplica:SetValue("Tokens", PlayerDataReplica.Data.Tokens + 1)
-			```
+--[[ API
+	::GetPlayerDataReplica(player: Player): Replica
+	Returns the Replica object associated with the given player. Modifying
+	tables/arrays should be done through the Replica instead of
+	GetValue/SetValue in order to make sure they replicate properly.
+	The Replica API can be found at:
+	https://madstudioroblox.github.io/Replica/
+		Example:
+		```lua
+			local PlayerDataReplica = PlayerData:GetPlayerDataReplica(player)
+			PlayerDataReplica:SetValue("Tokens", PlayerDataReplica.Data.Tokens + 1)
+		```
 
-		::GetValue(player: Player, keyPath: string | { string }): any?
-			Returns the value at the given keyPath.
-			Example:
-			```lua
-				local tokens = PlayerData:GetValue(player, "Tokens")
-			```
+	::GetValue(player: Player, keyPath: string | { string }): any?
+		Returns the value at the given keyPath.
+		Example:
+		```lua
+			local tokens = PlayerData:GetValue(player, "Tokens")
+		```
 
-		::SetValue(player: Player, keyPath: string | { string }, newValue: any)
-			Sets the value at the given keyPath to the given newValue.
-			Example:
-			```lua
-				PlayerData:SetValue(player, "Tokens", 0)
-			```
+	::SetValue(player: Player, keyPath: string | { string }, newValue: any)
+		Sets the value at the given keyPath to the given newValue.
+		Example:
+		```lua
+			PlayerData:SetValue(player, "Tokens", 0)
+		```
 
-		::SetValueCallback(player: Player, keyPath: string | { string }, callback: (newValue: any, oldValue: any) -> ()): RBXScriptConnection
-			Sets a callback function to be run when the value in path is changed.
-			Example:
-			```lua
-				PlayerData:SetValueCallback(player, "Tokens", function(newValue, oldValue)
-					print(player.Name .. "'s tokens have changed from " .. tostring(oldValue) .. " to " .. tostring(newValue))
-				end)
-			```
+	::SetValueCallback(player: Player, keyPath: string | { string }, callback: (newValue: any, oldValue: any) -> ()): RBXScriptConnection
+		Sets a callback function to be run when the value in path is changed.
+		Example:
+		```lua
+			PlayerData:SetValueCallback(player, "Tokens", function(newValue, oldValue)
+				print(player.Name .. "'s tokens have changed from " .. tostring(oldValue) .. " to " .. tostring(newValue))
+			end)
+		```
 --]]
 
 -- Services
@@ -58,14 +56,14 @@ local PlayerData = {}
 
 -- Dependencies
 
-local ReplicaServiceListeners = shared("ReplicaServiceListeners") ---@module ReplicaServiceListeners
-local ProfileService = shared("ProfileService") ---@module ProfileService
+local ReplicaServer = shared("ReplicaServer") ---@module ReplicaServer
+local ProfileStore = shared("ProfileStore") ---@module ProfileStore
 local ProfileTemplate = shared("ProfileTemplate") ---@module ProfileTemplate
 local GetRemote = shared("GetRemote") ---@module GetRemote
 
 -- Types
 
-type Replica = ReplicaServiceListeners.Replica
+type Replica = ReplicaServer.Replica
 
 -- Constants
 
@@ -86,17 +84,18 @@ local INFINITE_YIELD_WARNING_TIME = 5
 -- Global variables
 
 local StoreName = "PlayerData"
-local PlayerCache = {}
-local PlayerProfiles = {}
+local DataCallbacks: { [string]: (new: any, old: any) -> () } = {}
+local ReplicaCache = {}
+local PlayerProfiles: { [Player]: typeof(ProfileStore:StartSessionAsync()) } = {}
 local ProcessedPlayers = {}
-local PlayerDataToken = ReplicaServiceListeners.NewClassToken("PlayerData")
-local ProfileStore: DataStore
+local PlayerDataToken = ReplicaServer.Token("PlayerData")
+local ProfileDataStore: ProfileStore.ProfileStore<typeof(ProfileTemplate)>
 
 -- Objects
 
 -- Private functions
 
-local function deepTableCopy(originalTable: {}): {}
+local function deepTableCopy(originalTable: { [any]: any }): { [any]: any }
 	local copy = {}
 	for i: any, v: any in pairs(originalTable) do
 		if typeof(v) == "table" then
@@ -108,25 +107,11 @@ local function deepTableCopy(originalTable: {}): {}
 	return copy
 end
 
-local function profileReleased(player: Player)
-	if PlayerCache[player] then
-		-- Destroy player data Replica
-		PlayerCache[player]:Destroy()
-	end
-
-	-- Dereference the Replica
-	PlayerCache[player] = nil
-	PlayerProfiles[player] = nil
-
-	-- Kick the player, just in case
-	player:Kick()
-end
-
 local function settingChangeRequested(player: Player, settingName: string, newValue: any)
 	local params = FREE_SETTINGS[settingName]
 	if params and typeof(newValue) == params.Type and params.Valid(newValue) then
 		local playerDataReplica = PlayerData:GetPlayerDataReplica(player)
-		playerDataReplica:SetValue({ "Profile", settingName }, newValue)
+		playerDataReplica:Set({ "Profile", settingName }, newValue)
 	else
 		warn("Bad attempt from", player, "to change setting")
 	end
@@ -139,29 +124,66 @@ local function processPlayer(player: Player)
 
 	ProcessedPlayers[player] = true
 
-	local profile = ProfileStore:LoadProfileAsync(tostring(player.UserId), "ForceLoad")
+	local profile = ProfileDataStore:StartSessionAsync(tostring(player.UserId), {
+		Cancel = function()
+			return player.Parent ~= Players
+		end,
+	})
+
 	if profile ~= nil then
 		profile:AddUserId(player.UserId)
 		profile:Reconcile()
-		profile:ListenToRelease(function()
-			profileReleased(player)
+
+		profile.OnSessionEnd:Connect(function()
+			if ReplicaCache[player] then
+				ReplicaCache[player]:Destroy()
+			end
+
+			ReplicaCache[player] = nil
+			PlayerProfiles[player] = nil
+
+			player:Kick(`Profile session end - Please rejoin`)
 		end)
 
 		if player:IsDescendantOf(Players) then
-			local data: Replica = ReplicaServiceListeners.NewReplica({
-				ClassToken = PlayerDataToken,
+			local data: Replica = ReplicaServer.New({
+				Token = PlayerDataToken,
 				Tags = { Player = player },
 				Data = profile.Data,
-				Replication = { [player] = true },
 			})
 
-			PlayerCache[player] = data
+			data:Subscribe(player)
+
+			ReplicaCache[player] = data
 			PlayerProfiles[player] = profile
 		else
-			profile:Release()
+			profile:EndSession()
 		end
 	else
-		player:Kick("An error occurred while loading. Please try again.")
+		player:Kick("Profile data load failed - Please rejoin")
+	end
+end
+
+local function getPathTable(path: string | { string }): { string }
+	local indices
+	if typeof(path) == "string" then
+		indices = string.split(path, ".")
+	elseif typeof(path) == "table" then
+		indices = path
+	else
+		error("Invalid keyPath type: " .. typeof(path))
+	end
+
+	return indices
+end
+
+local function getPathString(path: string | { string }): string
+	if typeof(path) == "string" then
+		return path
+	elseif typeof(path) == "table" then
+		return table.concat(path, ".")
+	else
+		error("Invalid keyPath type: " .. typeof(path))
 	end
 end
 
@@ -180,7 +202,7 @@ function PlayerData:GetPlayerDataReplica(player: Player): Replica
 		error("Bad argument #1 to PlayerData:GetPlayerDataReplica, Player expected, got " .. typeof(player))
 	end
 
-	while not PlayerCache[player] do
+	while not ReplicaCache[player] do
 		task.wait()
 		if
 			INFINITE_YIELD_WARNING_ENABLED
@@ -191,7 +213,7 @@ function PlayerData:GetPlayerDataReplica(player: Player): Replica
 			warned = true
 		end
 	end
-	return PlayerCache[player]
+	return ReplicaCache[player]
 end
 
 -- Returns the value at the given `keyPath`. Keys can be passed in any of the
@@ -204,14 +226,7 @@ end
 function PlayerData:GetValue(player: Player, keyPath: string | { string }): any?
 	local dataReplica = self:GetPlayerDataReplica(player)
 
-	local indices
-	if typeof(keyPath) == "string" then
-		indices = string.split(keyPath, ".")
-	elseif typeof(keyPath) == "table" then
-		indices = keyPath
-	else
-		error("Invalid keyPath type: " .. typeof(keyPath))
-	end
+	local indices = getPathTable(keyPath)
 
 	local currentLocation = dataReplica.Data
 	for count, index in indices do
@@ -232,11 +247,20 @@ end
 -- PlayerData:SetValue(player, { "Powerups", "ExtraLives" }, 1)
 -- ```
 function PlayerData:SetValue(player: Player, keyPath: string | { string }, newValue: any)
-	self:GetPlayerDataReplica(player):SetValue(keyPath, newValue)
+	local callback = DataCallbacks[`{player.UserId}.{getPathString(keyPath)}`]
+	local oldValue = callback and self:GetValue(player, keyPath)
+
+	self:GetPlayerDataReplica(player):Set(keyPath, newValue)
+
+	if callback then
+		task.spawn(callback, newValue, oldValue)
+	end
 end
 
--- Sets a callback function to be run when the value in path is changed. Keys can be passed in any of the
--- following ways:
+-- Sets a callback function to be run when the value in path is changed. Only
+-- works when data is set through PlayerData:SetValue() until officially
+-- supported server-side in Replica. Keys can be passed in any of the following
+-- ways:
 -- ```lua
 -- PlayerData:SetValueCallback(player, "Tokens", callback)
 -- PlayerData:SetValueCallback(player, "Powerups.ExtraLives", callback)
@@ -245,9 +269,21 @@ end
 function PlayerData:SetValueCallback(
 	player: Player,
 	keyPath: string | { string },
-	callback: (newValue: any, oldValue: any) -> ()
-): RBXScriptConnection
-	return self:GetPlayerDataReplica(player):ListenToChange(keyPath, callback) :: RBXScriptConnection
+	callback: (newValue: any, oldValue: any) -> (),
+	runImmediately: boolean?
+)
+	local index = `{player.UserId}.{getPathString(keyPath)}`
+	DataCallbacks[index] = callback
+
+	if runImmediately then
+		local value = self:GetValue(player, keyPath)
+		task.spawn(callback, value, value)
+	end
+end
+
+function PlayerData:ClearValueCallback(player: Player, keyPath: string | { string })
+	local index = `{player.UserId}.{getPathString(keyPath)}`
+	DataCallbacks[index] = nil
 end
 
 -- Task Initialization
@@ -255,7 +291,7 @@ end
 function PlayerData:Run()
 	GetRemote("ChangeSetting"):OnServerEvent(settingChangeRequested)
 
-	ProfileStore = ProfileService.GetProfileStore(StoreName, ProfileTemplate)
+	ProfileDataStore = ProfileStore.New(StoreName, ProfileTemplate)
 
 	Players.PlayerAdded:Connect(processPlayer)
 	for _, player in pairs(Players:GetPlayers()) do
@@ -265,9 +301,9 @@ function PlayerData:Run()
 	Players.PlayerRemoving:Connect(function(player)
 		local profile = PlayerProfiles[player]
 		if profile ~= nil then
-			profile:Release()
+			profile:EndSession()
 		else
-			PlayerCache[player] = nil
+			ReplicaCache[player] = nil
 		end
 
 		ProcessedPlayers[player] = nil
